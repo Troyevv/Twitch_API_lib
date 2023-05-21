@@ -18,7 +18,7 @@ class APIError(Exception):
         return f'API Error: Status_code: {self.status_code} - {self.message}'
 
 
-class TwitchAPI:
+class PYTwitch:
     def __init__(self, username, client_id, client_secret):
         self.username = username
         self.client_id = client_id
