@@ -19,11 +19,14 @@ class APIError(Exception):
 
 
 class PYTwitch:
-    def __init__(self, username, client_id, client_secret):
+    def __init__(self, username, client_id, client_secret, access_token):
         self.username = username
         self.client_id = client_id
         self.client_secret = client_secret
         self.token = self.get_token()
+        self.access_token = access_token
+        self.stream_info = None
+        self.duration = None
 
     def get_token(self):
         url = "https://id.twitch.tv/oauth2/token"
@@ -36,7 +39,17 @@ class PYTwitch:
             "Accept": "application/json"
         }
         response = requests.post(url, data=data, headers=headers)
-        return response.json()["access_token"]
+        if response.status_code == 200:
+            self.token = response.json()["access_token"]
+            return response.json()["access_token"]
+        elif response.status_code == 401:
+            raise APIError(response.status_code, "Invalid credentials")
+        elif response.status_code == 404:
+            raise APIError(response.status_code, "Unable to")
+        elif response.status_code == 400:
+            raise APIError(response.status_code, "Invalid client")
+        elif response.status_code == 403:
+            raise APIError(response.status_code, "Invalid client secret")
 
     def get_stream_info(self):
         url = "https://api.twitch.tv/helix/streams?user_login=" + self.username
@@ -45,8 +58,10 @@ class PYTwitch:
             "Client-ID": self.client_id
         }
         response = requests.get(url, headers=headers)
-        if response.status_code == 200:
+        while response.status_code == 200:
             return response.json()
+        if response.status_code == 401:
+            self.get_token()
         elif response.status_code == 401:
             raise APIError(response.status_code, "Invalid token")
         elif response.status_code == 404:
@@ -61,46 +76,34 @@ class PYTwitch:
             raise APIError(response.status_code, "Unknown error")
 
     def is_stream_online(self):
-        response = self.get_stream_info()
-        if len(response['data']) == 1:
+        self.stream_info = self.get_stream_info()
+        if len(self.stream_info['data']) == 1:
             return True
         else:
             return False
 
     def channel_image(self):
-        response = self.get_stream_info()
-        if len(response['data']) == 1:
-            return response['data'][0]['profile_image_url']
-        else:
-            return None
+        url = "https://api.twitch.tv/helix/users?login=" + self.username
+        headers = {
+            "Authorization": "Bearer " + self.token,
+            "Client-ID": self.client_id
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            print(response.json())
+            return response.json()['data'][0]['profile_image_url']
 
     def get_viewers_count(self):
-        response = self.get_stream_info()
-        if len(response['data']) == 1:
-            return response['data'][0]['viewer_count']
-        else:
-            return None
+        return self.stream_info['data'][0]['viewer_count']
 
     def get_title(self):
-        response = self.get_stream_info()
-        if len(response['data']) == 1:
-            return response['data'][0]['title']
-        else:
-            return None
+        return self.stream_info['data'][0]['title']
 
     def get_game(self):
-        response = self.get_stream_info()
-        if len(response['data']) == 1:
-            return response['data'][0]['game_name']
-        else:
-            return None
+        return self.stream_info['data'][0]['game_name']
 
     def get_started_at(self):
-        response = self.get_stream_info()
-        if len(response['data']) == 1:
-            return response['data'][0]['started_at']
-        else:
-            return None
+        return self.stream_info['data'][0]['started_at']
 
     def stream_duration(self, timezone):
         time_start = self.get_started_at()
@@ -109,14 +112,11 @@ class PYTwitch:
         datetime_start = datetime_start.astimezone(pytz.timezone(timezone))
         timestamp_diff = now - datetime_start
         duration = timestamp_diff - datetime.timedelta(microseconds=timestamp_diff.microseconds)
+        self.duration = duration
         return duration
 
     def get_broadcaster_id(self):
-        response = self.get_stream_info()
-        if len(response['data']) == 1:
-            return response['data'][0]['broadcaster_id']
-        else:
-            return None
+        return self.stream_info['data'][0]['user_id']
 
     def get_chatters(self):
         url = "https://api.twitch.tv/helix/chat/chatters"

@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='pytwitch',
-    version='1.0.0',
+    version='1.0.1',
     author='troyev',
     description='Бибилотека для легкой работы с API Twitch',
     packages=['mylibrary'],
